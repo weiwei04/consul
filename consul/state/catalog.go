@@ -567,8 +567,16 @@ func (s *StateStore) ServiceNodes(ws memdb.WatchSet, serviceName string) (uint64
 	ws.Add(services.WatchCh())
 
 	var results structs.ServiceNodes
+	var lindex uint64
 	for service := services.Next(); service != nil; service = services.Next() {
-		results = append(results, service.(*structs.ServiceNode))
+		svcNode := service.(*structs.ServiceNode)
+		results = append(results, svcNode)
+		if lindex < svcNode.ModifyIndex {
+			lindex = svcNode.ModifyIndex
+		}	
+	}
+	if lindex == 0 {
+		lindex = idx
 	}
 
 	// Fill in the node details.
@@ -576,7 +584,7 @@ func (s *StateStore) ServiceNodes(ws memdb.WatchSet, serviceName string) (uint64
 	if err != nil {
 		return 0, nil, fmt.Errorf("failed parsing service nodes: %s", err)
 	}
-	return idx, results, nil
+	return lindex, results, nil
 }
 
 // ServiceTagNodes returns the nodes associated with a given service, filtering
@@ -597,11 +605,19 @@ func (s *StateStore) ServiceTagNodes(ws memdb.WatchSet, service string, tag stri
 
 	// Gather all the services and apply the tag filter.
 	var results structs.ServiceNodes
+	var lindex uint64
 	for service := services.Next(); service != nil; service = services.Next() {
 		svc := service.(*structs.ServiceNode)
 		if !serviceTagFilter(svc, tag) {
 			results = append(results, svc)
+		
 		}
+		if lindex < svc.ModifyIndex {
+			lindex = svc.ModifyIndex
+		}
+	}
+	if lindex == 0 {
+		lindex = idx
 	}
 
 	// Fill in the node details.
@@ -609,7 +625,7 @@ func (s *StateStore) ServiceTagNodes(ws memdb.WatchSet, service string, tag stri
 	if err != nil {
 		return 0, nil, fmt.Errorf("failed parsing service nodes: %s", err)
 	}
-	return idx, results, nil
+	return lindex, results, nil
 }
 
 // serviceTagFilter returns true (should filter) if the given service node
